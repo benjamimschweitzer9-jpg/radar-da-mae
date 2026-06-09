@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Radar da Mãe</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --red: #e8321a;
+    --pink: #ff6b8a;
+    --yellow: #ffd93d;
+    --dark: #1a1a1a;
+    --white: #faf9f7;
+  }
+
+  body {
+    background: #000;
+    width: 100vw;
+    height: 100dvh;
+    overflow: hidden;
+    font-family: 'Nunito', sans-serif;
+    touch-action: none;
+  }
+
+  /* ── CÂMERA ── */
+  #video {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 1;
+  }
+
+  #canvas-hidden {
+    display: none;
+  }
+
+  /* ── OVERLAY GERAL ── */
+  #overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  /* ── MIRA ── */
+  #mira {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 3;
+    pointer-events: none;
+  }
+
+  .mira-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.8);
+    transform: translate(-50%, -50%);
+  }
+
+  #ring1 {
+    width: 80px;
+    height: 80px;
+    border-color: rgba(255,255,255,0.9);
+    animation: pulse-ring 2s ease-in-out infinite;
+  }
+  #ring2 {
+    width: 110px;
+    height: 110px;
+    border-color: rgba(255,255,255,0.4);
+    animation: pulse-ring 2s ease-in-out infinite 0.3s;
+  }
+  #ring3 {
+    width: 140px;
+    height: 140px;
+    border-color: rgba(255,255,255,0.15);
+    animation: pulse-ring 2s ease-in-out infinite 0.6s;
+  }
+
+  @keyframes pulse-ring {
+    0%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    50% { opacity: 0.5; transform: translate(-50%, -50%) scale(1.06); }
+  }
+
+  /* Cruzeta */
+  .mira-line {
+    position: absolute;
+    background: rgba(255,255,255,0.7);
+    top: 50%;
+    left: 50%;
+  }
+  #line-h {
+    width: 30px;
+    height: 1.5px;
+    transform: translate(-50%, -50%);
+  }
+  #line-v {
+    width: 1.5px;
+    height: 30px;
+    transform: translate(-50%, -50%);
+  }
+  .mira-dot {
+    position: absolute;
+    width: 5px;
+    height: 5px;
+    background: var(--red);
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 8px var(--red);
+    animation: dot-blink 1.2s ease-in-out infinite;
+  }
+  @keyframes dot-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* Mira vermelha quando analisando */
+  #mira.scanning .mira-ring { border-color: var(--red) !important; }
+  #mira.scanning #ring1 { animation: spin-ring 1s linear infinite; }
+  @keyframes spin-ring {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+  }
+
+  /* ── BOTÃO ESCANEAR ── */
+  #scan-btn {
+    position: fixed;
+    bottom: 48px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    background: var(--red);
+    color: white;
+    border: none;
+    border-radius: 50px;
+    padding: 18px 44px;
+    font-family: 'Fredoka One', cursive;
+    font-size: 20px;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    box-shadow: 0 6px 24px rgba(232,50,26,0.5);
+    transition: transform 0.15s, box-shadow 0.15s;
+    pointer-events: all;
+  }
+  #scan-btn:active {
+    transform: translateX(-50%) scale(0.95);
+    box-shadow: 0 3px 12px rgba(232,50,26,0.4);
+  }
+  #scan-btn:disabled {
+    background: #888;
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+
+  /* ── TÍTULO ── */
+  #app-title {
+    position: fixed;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    text-align: center;
+    pointer-events: none;
+  }
+  #app-title h1 {
+    font-family: 'Fredoka One', cursive;
+    font-size: 26px;
+    color: white;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.6);
+    letter-spacing: 0.02em;
+  }
+  #app-title p {
+    font-size: 11px;
+    color: rgba(255,255,255,0.6);
+    letter-spacing: 0.1em;
+    margin-top: 2px;
+    text-shadow: 0 1px 6px rgba(0,0,0,0.8);
+  }
+
+  /* ── STATUS ── */
+  #status {
+    position: fixed;
+    bottom: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 0.1em;
+    text-align: center;
+    pointer-events: none;
+    font-weight: 600;
+    text-shadow: 0 1px 6px rgba(0,0,0,0.8);
+    transition: opacity 0.3s;
+  }
+
+  /* ── BOLHA DE ALERTA ── */
+  #alert-bubble {
+    position: fixed;
+    bottom: -400px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    width: min(88vw, 360px);
+    transition: bottom 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+  }
+
+  #alert-bubble.visible {
+    bottom: 100px;
+    pointer-events: all;
+  }
+
+  /* Foto esférica */
+  #bubble-photo {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 4px solid var(--red);
+    object-fit: cover;
+    display: block;
+    margin: 0 auto 16px;
+    box-shadow:
+      0 0 0 6px rgba(232,50,26,0.2),
+      0 0 0 12px rgba(232,50,26,0.08),
+      0 12px 40px rgba(0,0,0,0.5);
+    animation: bubble-pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes bubble-pulse {
+    0%, 100% { box-shadow: 0 0 0 6px rgba(232,50,26,0.2), 0 0 0 12px rgba(232,50,26,0.08), 0 12px 40px rgba(0,0,0,0.5); }
+    50% { box-shadow: 0 0 0 10px rgba(232,50,26,0.3), 0 0 0 20px rgba(232,50,26,0.1), 0 12px 40px rgba(0,0,0,0.5); }
+  }
+
+  /* Card da bronca */
+  #alert-card {
+    background: white;
+    border-radius: 20px;
+    padding: 20px 24px 24px;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+    position: relative;
+    overflow: hidden;
+  }
+
+  #alert-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--red), var(--pink));
+  }
+
+  #alert-tag {
+    display: inline-block;
+    background: #fff0ee;
+    color: var(--red);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    padding: 4px 10px;
+    border-radius: 20px;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+  }
+
+  #alert-perigo {
+    font-size: 14px;
+    font-weight: 700;
+    color: #444;
+    margin-bottom: 14px;
+    line-height: 1.5;
+  }
+
+  #alert-divider {
+    height: 1px;
+    background: #f0f0f0;
+    margin-bottom: 14px;
+  }
+
+  #alert-mae-label {
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--pink);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  #alert-frase {
+    font-family: 'Fredoka One', cursive;
+    font-size: 22px;
+    color: var(--dark);
+    line-height: 1.3;
+  }
+
+  #close-btn {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 28px;
+    height: 28px;
+    background: #f5f5f5;
+    border: none;
+    border-radius: 50%;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #888;
+    pointer-events: all;
+  }
+
+  /* ── TELA DE PERMISSÃO ── */
+  #permission-screen {
+    position: fixed;
+    inset: 0;
+    background: var(--dark);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 40px;
+  }
+
+  #permission-screen h2 {
+    font-family: 'Fredoka One', cursive;
+    font-size: 28px;
+    color: white;
+    text-align: center;
+  }
+
+  #permission-screen p {
+    font-size: 14px;
+    color: rgba(255,255,255,0.5);
+    text-align: center;
+    line-height: 1.7;
+  }
+
+  #permission-btn {
+    background: var(--red);
+    color: white;
+    border: none;
+    border-radius: 50px;
+    padding: 16px 40px;
+    font-family: 'Fredoka One', cursive;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 6px 24px rgba(232,50,26,0.4);
+    margin-top: 8px;
+  }
+
+  .cam-icon {
+    font-size: 56px;
+    animation: wiggle 2s ease-in-out infinite;
+  }
+  @keyframes wiggle {
+    0%, 100% { transform: rotate(-5deg); }
+    50% { transform: rotate(5deg); }
+  }
+
+  /* ── OVERLAY ESCANEANDO ── */
+  #scan-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(232,50,26,0.08);
+    z-index: 5;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  #scan-overlay.active { opacity: 1; }
+
+  /* linha de scan */
+  #scan-line {
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--red), transparent);
+    top: -2px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  #scan-overlay.active #scan-line {
+    opacity: 0.8;
+    animation: scan-move 1.2s linear infinite;
+  }
+  @keyframes scan-move {
+    from { top: 0%; }
+    to { top: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TELA DE PERMISSÃO -->
+<div id="permission-screen">
+  <div class="cam-icon">📸</div>
+  <h2>Radar da Mãe</h2>
+  <p>Aponte a câmera para qualquer canto da casa e descubra o que sua mãe diria sobre aquela bagunça.</p>
+  <button id="permission-btn" onclick="initCamera()">Ligar câmera</button>
+</div>
+
+<!-- CÂMERA -->
+<video id="video" autoplay playsinline muted></video>
+<canvas id="canvas-hidden"></canvas>
+
+<!-- OVERLAY DE SCAN -->
+<div id="scan-overlay">
+  <div id="scan-line"></div>
+</div>
+
+<!-- OVERLAY GERAL -->
+<div id="overlay"></div>
+
+<!-- TÍTULO -->
+<div id="app-title">
+  <h1>📡 Radar da Mãe</h1>
+  <p>APONTE · ESCANEIE · SOBREVIVA</p>
+</div>
+
+<!-- MIRA -->
+<div id="mira">
+  <div class="mira-ring" id="ring1"></div>
+  <div class="mira-ring" id="ring2"></div>
+  <div class="mira-ring" id="ring3"></div>
+  <div class="mira-line" id="line-h"></div>
+  <div class="mira-line" id="line-v"></div>
+  <div class="mira-dot"></div>
+</div>
+
+<!-- STATUS -->
+<div id="status">aponte para um cômodo da casa</div>
+
+<!-- BOTÃO -->
+<button id="scan-btn" onclick="scanear()">🔍 Escanear</button>
+
+<!-- BOLHA DE ALERTA -->
+<div id="alert-bubble">
+  <img id="bubble-photo" src="" alt="foto do perigo">
+  <div id="alert-card">
+    <button id="close-btn" onclick="fecharAlerta()">✕</button>
+    <div id="alert-tag">⚠️ Alerta de Bronca</div>
+    <div id="alert-perigo"></div>
+    <div id="alert-divider"></div>
+    <div id="alert-mae-label">🗣️ O que ela vai falar</div>
+    <div id="alert-frase"></div>
+  </div>
+</div>
+
+<script>
+const video = document.getElementById('video');
+const canvasHidden = document.getElementById('canvas-hidden');
+const mira = document.getElementById('mira');
+const scanBtn = document.getElementById('scan-btn');
+const status = document.getElementById('status');
+const scanOverlay = document.getElementById('scan-overlay');
+const alertBubble = document.getElementById('alert-bubble');
+
+let stream = null;
+let scanning = false;
+
+// ── CÂMERA ──────────────────────────────────────────────
+async function initCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    video.srcObject = stream;
+    document.getElementById('permission-screen').style.display = 'none';
+  } catch(e) {
+    alert('Não foi possível acessar a câmera. Verifique as permissões do navegador.');
+  }
+}
+
+// ── CAPTURA FRAME ────────────────────────────────────────
+function captureFrame() {
+  const w = video.videoWidth || 640;
+  const h = video.videoHeight || 480;
+  canvasHidden.width = w;
+  canvasHidden.height = h;
+  const ctx = canvasHidden.getContext('2d');
+  ctx.drawImage(video, 0, 0, w, h);
+  return canvasHidden.toDataURL('image/jpeg', 0.7);
+}
+
+// ── CAPTURA ESFERA (crop central) ────────────────────────
+function captureEsfera() {
+  const w = video.videoWidth || 640;
+  const h = video.videoHeight || 480;
+  const size = Math.min(w, h) * 0.6;
+  const sx = (w - size) / 2;
+  const sy = (h - size) / 2;
+
+  const c = document.createElement('canvas');
+  c.width = size;
+  c.height = size;
+  const cx = c.getContext('2d');
+
+  // Clip circular
+  cx.beginPath();
+  cx.arc(size/2, size/2, size/2, 0, Math.PI * 2);
+  cx.clip();
+  cx.drawImage(video, sx, sy, size, size, 0, 0, size, size);
+
+  return c.toDataURL('image/jpeg', 0.8);
+}
+
+// ── ESCANEAR ─────────────────────────────────────────────
+async function scanear() {
+  if (scanning) return;
+  scanning = true;
+
+  // UI: escaneando
+  scanBtn.disabled = true;
+  scanBtn.textContent = '🔄 Analisando...';
+  mira.classList.add('scanning');
+  scanOverlay.classList.add('active');
+  status.textContent = 'analisando o ambiente...';
+  fecharAlerta();
+
+  // Captura
+  const frameData = captureFrame();
+  const esferaData = captureEsfera();
+  const base64 = frameData.split(',')[1];
+
+  try {
+    const GEMINI_KEY = 'AQ.Ab8RN6LsXZ4WfykbdgJtqGU2RaIFgJBFowDl7aMtfViDynC41g';
+    const prompt = `Você é o "Radar da Mãe" — um app bem-humorado que analisa fotos de ambientes domésticos e detecta situações que fariam uma mãe brasileira típica chamar a atenção do filho.
+
+Analise a imagem e responda SOMENTE com um JSON neste formato exato (sem markdown, sem texto extra):
+{
+  "temPerigo": true,
+  "perigo": "Descrição curta do que está errado (max 80 chars)",
+  "frase": "Frase exata que a mãe falaria (max 60 chars, coloquial, dramática)"
+}
+
+Se o ambiente estiver limpo e organizado, responda:
+{
+  "temPerigo": false,
+  "perigo": "",
+  "frase": ""
+}
+
+Exemplos de situações de perigo e frases:
+- Roupas em cima da cama → "Eu não sou sua empregada!"
+- Prato sujo na pia → "Nasceu com os braços tortos?"
+- Luz acesa em quarto vazio → "Dinheiro não cai do céu!"
+- Sapato no lugar errado → "Essa casa é uma pocilga!"
+- Copo sem porta-copo → "Vai manchar minha mesa!"
+- Travesseiro no chão → "É tudo eu nessa casa!"
+- Toalha molhada na cama → "Você quer criar bolor?"
+- TV ligada sem ninguém → "Quem paga a conta sou eu!"
+
+Seja criativo, engraçado e autêntico. A frase deve soar como uma mãe brasileira de verdade.`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              { inline_data: { mime_type: 'image/jpeg', data: base64 } }
+            ]
+          }]
+        })
+      }
+    );
+
+    const data = await response.json();
+    window._debugResp = JSON.stringify(data).slice(0, 300);
+    alert('RESPOSTA DA API:\n' + window._debugResp);
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+
+    let resultado;
+    try {
+      resultado = JSON.parse(text);
+    } catch(e) {
+      const match = text.match(/\{[\s\S]*\}/);
+      resultado = match ? JSON.parse(match[0]) : null;
+    }
+
+    if (resultado && resultado.temPerigo) {
+      mostrarAlerta(resultado.perigo, resultado.frase, esferaData);
+      status.textContent = '⚠️ perigo detectado!';
+    } else {
+      status.textContent = '✅ ambiente aprovado pela mãe';
+      setTimeout(() => { status.textContent = 'aponte para um cômodo da casa'; }, 3000);
+    }
+
+  } catch(e) {
+    status.textContent = 'erro: ' + e.message;
+    alert('ERRO DETALHADO:\n' + e.message + '\n\nResposta: ' + (window._debugResp || 'nenhuma'));
+    setTimeout(() => { status.textContent = 'aponte para um cômodo da casa'; }, 8000);
+  }
+
+  // Restaura UI
+  scanning = false;
+  scanBtn.disabled = false;
+  scanBtn.textContent = '🔍 Escanear';
+  mira.classList.remove('scanning');
+  scanOverlay.classList.remove('active');
+}
+
+// ── MOSTRAR ALERTA ───────────────────────────────────────
+function mostrarAlerta(perigo, frase, fotoData) {
+  document.getElementById('bubble-photo').src = fotoData;
+  document.getElementById('alert-perigo').textContent = perigo;
+  document.getElementById('alert-frase').textContent = frase;
+  alertBubble.classList.add('visible');
+
+  // Vibração se disponível
+  if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]);
+}
+
+function fecharAlerta() {
+  alertBubble.classList.remove('visible');
+}
+</script>
+</body>
+</html>
